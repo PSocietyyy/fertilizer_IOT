@@ -45,55 +45,41 @@ void readSensor(float &temperature, float &humidity)
    ========================================================== */
 void controlRelay(float temperature, float humidity)
 {
-    // Kipas
-    if (fanBypass)
-    {
-        // Switch di app sedang ON -> paksa nyala, abaikan suhu
+    // Kipas (Mode otomatis berdasarkan suhu)
+    if (temperature > TEMP_THRESHOLD)
         fanOn();
-    }
     else
-    {
-        // Mode otomatis berdasarkan suhu
-        if (temperature > TEMP_THRESHOLD)
-            fanOn();
-        else
-            fanOff();
-    }
+        fanOff();
 
-    // Pompa
-    if (pumpBypass)
+    // Pompa (Mode otomatis berdasarkan kelembapan)
+    if (humidity < HUM_THRESHOLD)
     {
-        // Switch di app sedang ON -> paksa nyala, abaikan kelembapan
         pumpOn();
     }
     else
     {
-        // Mode otomatis berdasarkan kelembapan
-        if (humidity < HUM_THRESHOLD)
-            pumpOn();
-        else
-            pumpOff();
+        pumpOff();
     }
 }
 
 void fanOn()
 {
-    digitalWrite(FAN_RELAY_PIN, LOW);     // Active LOW
+    digitalWrite(FAN_RELAY_PIN, HIGH);    // Active HIGH
 }
 
 void fanOff()
 {
-    digitalWrite(FAN_RELAY_PIN, HIGH);
+    digitalWrite(FAN_RELAY_PIN, LOW);
 }
 
 void pumpOn()
 {
-    digitalWrite(PUMP_RELAY_PIN, LOW);    // Active LOW
+    digitalWrite(PUMP_RELAY_PIN, HIGH);   // Active HIGH
 }
 
 void pumpOff()
 {
-    digitalWrite(PUMP_RELAY_PIN, HIGH);
+    digitalWrite(PUMP_RELAY_PIN, LOW);
 }
 
 /* ==========================================================
@@ -122,10 +108,10 @@ void showSensorData(float temperature, float humidity)
 
     display.setCursor(0, 50);
     display.print("Fan:");
-    display.print(digitalRead(FAN_RELAY_PIN) == LOW ? "ON " : "OFF");
+    display.print(digitalRead(FAN_RELAY_PIN) == HIGH ? "ON " : "OFF");
 
     display.print(" Pump:");
-    display.print(digitalRead(PUMP_RELAY_PIN) == LOW ? "ON" : "OFF");
+    display.print(digitalRead(PUMP_RELAY_PIN) == HIGH ? "ON" : "OFF");
 
     display.display();
 }

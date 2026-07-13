@@ -28,6 +28,9 @@ void setup()
     // Cek sensor tiap 2 detik, tapi kirim ke Blynk cuman kalau perlu (checkSensorAndControl)
     timer.setInterval(SENSOR_CHECK_INTERVAL, checkSensorAndControl);
 
+    // Jalankan pertama kali agar data sensor dan OLED langsung terisi
+    checkSensorAndControl();
+
     Serial.println("System Ready");
 }
 
@@ -39,32 +42,22 @@ void loop()
 
 /* ==========================================================
    Saat device baru connect ke Blynk:
-   sinkronkan status switch manual (biar kalau ESP restart,
-   posisi switch di app tetap dipakai) dan kirim status Wifi.
+   Reset status switch manual ke OFF (Auto), matikan semua LED status,
+   dan kirim status Wifi.
    ========================================================== */
 BLYNK_CONNECTED()
 {
-    Blynk.syncVirtual(VPIN_FAN_SW, VPIN_PUMP_SW);
+    Blynk.virtualWrite(VPIN_PUMP_SW, 0);
+    Blynk.virtualWrite(VPIN_PUMP_LED, 0);
+    Blynk.virtualWrite(VPIN_FAN_LED, 0);
     Blynk.virtualWrite(VPIN_WIFI, 1);
+
+    lastSentPumpState = false;
+    lastSentFanState = false;
     lastSentWifi = 1;
 }
 
-/* ==========================================================
-   Switch manual dari Blynk
-   ========================================================== */
-BLYNK_WRITE(VPIN_FAN_SW)
-{
-    // ON  -> bypass, paksa kipas nyala walau suhu belum melewati threshold
-    // OFF -> lepas bypass, kipas kembali mengikuti kontrol otomatis (bukan dipaksa mati)
-    fanBypass = param.asInt();
-}
 
-BLYNK_WRITE(VPIN_PUMP_SW)
-{
-    // ON  -> bypass, paksa pompa nyala walau kelembapan belum di bawah threshold
-    // OFF -> lepas bypass, pompa kembali mengikuti kontrol otomatis (bukan dipaksa mati)
-    pumpBypass = param.asInt();
-}
 
 /* ==========================================================
    Cek sensor, jalankan kontrol relay, update OLED,
@@ -72,30 +65,27 @@ BLYNK_WRITE(VPIN_PUMP_SW)
    ========================================================== */
 void checkSensorAndControl()
 {
-    float temperature;
-    float humidity;
+    readSensor(currentTemp, currentHum);
 
-    readSensor(temperature, humidity);
-
-    if (isnan(temperature) || isnan(humidity))
+    if (isnan(currentTemp) || isnan(currentHum))
     {
         Serial.println("Failed to read DHT11");
         showError("DHT11 ERROR");
         return;
     }
 
-    controlRelay(temperature, humidity);
+    controlRelay(currentTemp, currentHum);
 
-    bool fanState  = (digitalRead(FAN_RELAY_PIN)  == LOW);
-    bool pumpState = (digitalRead(PUMP_RELAY_PIN) == LOW);
+    bool fanState  = (digitalRead(FAN_RELAY_PIN)  == HIGH);
+    bool pumpState = (digitalRead(PUMP_RELAY_PIN) == HIGH);
 
     Serial.println("--------------------------------");
-    Serial.printf("Temperature : %.1f C\n", temperature);
-    Serial.printf("Humidity    : %.1f %%\n", humidity);
-    Serial.printf("Fan         : %s (%s)\n", fanState ? "ON" : "OFF", fanBypass ? "bypass" : "auto");
-    Serial.printf("Pump        : %s (%s)\n", pumpState ? "ON" : "OFF", pumpBypass ? "bypass" : "auto");
+    Serial.printf("Temperature : %.1f C\n", currentTemp);
+    Serial.printf("Humidity    : %.1f %%\n", currentHum);
+    Serial.printf("Fan         : %s (auto)\n", fanState ? "ON" : "OFF");
+    Serial.printf("Pump        : %s (auto)\n", pumpState ? "ON" : "OFF");
 
-    showSensorData(temperature, humidity);
+    showSensorData(currentTemp, currentHum);
 
     bool needSend = false;
     unsigned long now = millis();
@@ -108,17 +98,17 @@ void checkSensorAndControl()
     }
 
     // Kirim suhu hanya jika berubah cukup signifikan
-    if (fabs(temperature - lastSentTemp) >= TEMP_DELTA_MIN || needSend)
+    if (fabs(currentTemp - lastSentTemp) >= TEMP_DELTA_MIN || needSend)
     {
-        Blynk.virtualWrite(VPIN_SUHU, temperature);
-        lastSentTemp = temperature;
+        Blynk.virtualWrite(VPIN_SUHU, currentTemp);
+        lastSentTemp = currentTemp;
     }
 
     // Kirim kelembapan hanya jika berubah cukup signifikan
-    if (fabs(humidity - lastSentHum) >= HUM_DELTA_MIN || needSend)
+    if (fabs(currentHum - lastSentHum) >= HUM_DELTA_MIN || needSend)
     {
-        Blynk.virtualWrite(VPIN_HUMID, humidity);
-        lastSentHum = humidity;
+        Blynk.virtualWrite(VPIN_HUMID, currentHum);
+        lastSentHum = currentHum;
     }
 
     // Kirim status kipas hanya jika berubah
@@ -128,9 +118,10 @@ void checkSensorAndControl()
         lastSentFanState = fanState;
     }
 
-    // Kirim status pompa hanya jika berubah
+    // Kirim status pompa dan switch Blynk hanya jika berubah
     if (pumpState != lastSentPumpState || needSend)
     {
+        Blynk.virtualWrite(VPIN_PUMP_SW, pumpState ? 1 : 0);
         Blynk.virtualWrite(VPIN_PUMP_LED, pumpState ? 1 : 0);
         lastSentPumpState = pumpState;
     }

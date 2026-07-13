@@ -17,8 +17,8 @@ Adafruit_SSD1306 display(
 BlynkTimer timer;
 
 // State variables
-bool fanBypass   = false;
-bool pumpBypass  = false;
+float currentTemp = 0.0;
+float currentHum = 0.0;
 
 float lastSentTemp     = -999.0;
 float lastSentHum      = -999.0;

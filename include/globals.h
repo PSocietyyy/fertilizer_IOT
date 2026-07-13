@@ -13,8 +13,8 @@ extern Adafruit_SSD1306 display;
 extern BlynkTimer timer;
 
 // State variables
-extern bool fanBypass;
-extern bool pumpBypass;
+extern float currentTemp;
+extern float currentHum;
 
 extern float lastSentTemp;
 extern float lastSentHum;
